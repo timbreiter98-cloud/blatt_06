@@ -1,0 +1,21 @@
+artist == "Beatles"
+=> (artist == "Beatles")
+
+year == 1965
+=> (year == 1965)
+
+artist == "Beatles" and year == 1965
+=> ((artist == "Beatles") and (year == 1965))
+
+genre in ("rock", "jazz")
+=> (genre in ("rock", "jazz"))
+
+not artist == "Beatles"
+=> (not (artist == "Beatles"))
+
+(year <= 1990 or artist == "Beatles") and year > 1960
+=> (((year <= 1990) or (artist == "Beatles")) and (year > 1960))
+
+genre in ("rock", "jazz") or year <= 1990 and not artist == "Beatles"
+=> ((genre in ("rock", "jazz")) or ((year <= 1990) and (not (artist == "Beatles"))))
+

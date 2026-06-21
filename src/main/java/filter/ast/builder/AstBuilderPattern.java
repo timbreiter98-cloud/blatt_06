@@ -1,66 +1,111 @@
 package filter.ast.builder;
 
 import filter.FilterParser;
+import filter.ast.nodes.CompOp;
 import filter.ast.nodes.Expr;
 import filter.ast.nodes.Value;
+import java.util.ArrayList;
 import java.util.List;
 
 public class AstBuilderPattern {
 
-  // Public entry point
-  // query  : expr EOF
   public Expr translate(FilterParser.QueryContext ctx) {
-    // TODO
-    return null;
+    return buildExpr(ctx.expr());
   }
 
-  // expr: orExpr
   private Expr buildExpr(FilterParser.ExprContext ctx) {
-    // TODO
-    return null;
+    return buildOrExpr(ctx.orExpr());
   }
 
-  // orExpr : andExpr (OR andExpr)*
   private Expr buildOrExpr(FilterParser.OrExprContext ctx) {
-    // TODO
-    return null;
+    var parts = ctx.andExpr();
+    Expr result = buildAndExpr(parts.getFirst());
+
+    for (int i = 1; i < parts.size(); i++) {
+      result = new Expr.Or(result, buildAndExpr(parts.get(i)));
+    }
+
+    return result;
   }
 
-  // andExpr: notExpr (AND notExpr)*
   private Expr buildAndExpr(FilterParser.AndExprContext ctx) {
-    // TODO
-    return null;
+    var parts = ctx.notExpr();
+    Expr result = buildNotExpr(parts.getFirst());
+
+    for (int i = 1; i < parts.size(); i++) {
+      result = new Expr.And(result, buildNotExpr(parts.get(i)));
+    }
+
+    return result;
   }
 
-  // notExpr: NOT notExpr | primary
   private Expr buildNotExpr(FilterParser.NotExprContext ctx) {
-    // TODO
-    return null;
+    if (ctx.NOT() != null) {
+      return new Expr.Not(buildNotExpr(ctx.notExpr()));
+    }
+
+    return buildPrimary(ctx.primary());
   }
 
-  // primary: comparison | '(' expr ')'
   private Expr buildPrimary(FilterParser.PrimaryContext ctx) {
-    // TODO
-    return null;
+    if (ctx.comparison() != null) {
+      return buildComparison(ctx.comparison());
+    }
+
+    return buildExpr(ctx.expr());
   }
 
-  // comparison
-  //   : IDENTIFIER op=COMPOP value=literal
-  //   | IDENTIFIER IN '(' literalList ')'
   private Expr buildComparison(FilterParser.ComparisonContext ctx) {
-    // TODO
-    return null;
+    var field = ctx.IDENTIFIER().getText();
+
+    if (ctx.op != null) {
+      return new Expr.Comparison(
+          field, CompOp.fromSymbol(ctx.op.getText()), buildLiteral(ctx.value));
+    }
+
+    return new Expr.InList(field, buildLiteralList(ctx.literalList()));
   }
 
-  // literalList: literal (',' literal)*
   private List<Value> buildLiteralList(FilterParser.LiteralListContext ctx) {
-    // TODO
-    return null;
+    var values = new ArrayList<Value>();
+
+    for (var literal : ctx.literal()) {
+      values.add(buildLiteral(literal));
+    }
+
+    return values;
   }
 
-  // literal: STRING | NUMBER
   private Value buildLiteral(FilterParser.LiteralContext ctx) {
-    // TODO
-    return null;
+    if (ctx.STRING() != null) {
+      return new Value.Str(unquote(ctx.STRING().getText()));
+    }
+
+    return new Value.Num(Integer.parseInt(ctx.NUMBER().getText()));
+  }
+
+  private String unquote(String text) {
+    var inner = text.substring(1, text.length() - 1);
+    var result = new StringBuilder();
+    boolean escaped = false;
+
+    for (int i = 0; i < inner.length(); i++) {
+      char c = inner.charAt(i);
+
+      if (escaped) {
+        result.append(c);
+        escaped = false;
+      } else if (c == '\\') {
+        escaped = true;
+      } else {
+        result.append(c);
+      }
+    }
+
+    if (escaped) {
+      result.append('\\');
+    }
+
+    return result.toString();
   }
 }

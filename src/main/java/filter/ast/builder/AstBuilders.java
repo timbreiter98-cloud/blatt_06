@@ -13,21 +13,46 @@ public class AstBuilders {
     return simplify(translator.apply(parse(query)));
   }
 
-  public static Expr simplify(Expr e) {
-    // TODO
-    return e;
+  public static Expr simplify(Expr expr) {
+    return switch (expr) {
+      case Expr.And(var left, var right) -> {
+        var simplifiedLeft = simplify(left);
+        var simplifiedRight = simplify(right);
+
+        if (simplifiedLeft.equals(simplifiedRight)) {
+          yield simplifiedLeft;
+        }
+
+        yield new Expr.And(simplifiedLeft, simplifiedRight);
+      }
+      case Expr.Or(var left, var right) -> {
+        var simplifiedLeft = simplify(left);
+        var simplifiedRight = simplify(right);
+
+        if (simplifiedLeft.equals(simplifiedRight)) {
+          yield simplifiedLeft;
+        }
+
+        yield new Expr.Or(simplifiedLeft, simplifiedRight);
+      }
+      case Expr.Not(Expr.Not(var inner)) -> simplify(inner);
+      case Expr.Not(var inner) -> new Expr.Not(simplify(inner));
+      case Expr.Comparison comparison -> comparison;
+      case Expr.InList inList -> inList;
+    };
   }
 
   public static FilterParser.QueryContext parse(String query) {
-    var cs = CharStreams.fromString(query);
-    var lexer = new FilterLexer(cs);
+    var charStream = CharStreams.fromString(query);
+    var lexer = new FilterLexer(charStream);
     var tokens = new CommonTokenStream(lexer);
     var parser = new FilterParser(tokens);
+    var context = parser.query();
 
-    var ctx = parser.query();
-    if (parser.getNumberOfSyntaxErrors() > 0)
+    if (parser.getNumberOfSyntaxErrors() > 0) {
       throw new IllegalStateException("Syntax errors in query: " + query);
+    }
 
-    return ctx;
+    return context;
   }
 }

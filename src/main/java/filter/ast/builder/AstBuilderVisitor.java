@@ -2,80 +2,162 @@ package filter.ast.builder;
 
 import filter.FilterBaseVisitor;
 import filter.FilterParser;
+import filter.ast.nodes.CompOp;
 import filter.ast.nodes.Expr;
+import filter.ast.nodes.Value;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 
 public class AstBuilderVisitor extends FilterBaseVisitor<Void> {
 
-  // TODO
+  private final Deque<Expr> exprStack = new ArrayDeque<>();
+  private final Deque<Value> valueStack = new ArrayDeque<>();
 
-  // Public entry point
   public Expr translate(FilterParser.QueryContext ctx) {
-    // TODO
-    return null;
+    exprStack.clear();
+    valueStack.clear();
+
+    visit(ctx);
+
+    if (exprStack.size() != 1) {
+      throw new IllegalStateException("Expected exactly one expression on the stack");
+    }
+
+    return exprStack.pop();
   }
 
-  // query  : expr EOF
   @Override
   public Void visitQuery(FilterParser.QueryContext ctx) {
-    // TODO
+    visit(ctx.expr());
     return null;
   }
 
-  // expr: orExpr
   @Override
   public Void visitExpr(FilterParser.ExprContext ctx) {
-    // TODO
+    visit(ctx.orExpr());
     return null;
   }
 
-  // orExpr : andExpr (OR andExpr)*
   @Override
   public Void visitOrExpr(FilterParser.OrExprContext ctx) {
-    // TODO
+    var parts = ctx.andExpr();
+    visit(parts.getFirst());
+    Expr result = exprStack.pop();
+
+    for (int i = 1; i < parts.size(); i++) {
+      visit(parts.get(i));
+      var right = exprStack.pop();
+      result = new Expr.Or(result, right);
+    }
+
+    exprStack.push(result);
     return null;
   }
 
-  // andExpr: notExpr (AND notExpr)*
   @Override
   public Void visitAndExpr(FilterParser.AndExprContext ctx) {
-    // TODO
+    var parts = ctx.notExpr();
+    visit(parts.getFirst());
+    Expr result = exprStack.pop();
+
+    for (int i = 1; i < parts.size(); i++) {
+      visit(parts.get(i));
+      var right = exprStack.pop();
+      result = new Expr.And(result, right);
+    }
+
+    exprStack.push(result);
     return null;
   }
 
-  // notExpr: NOT notExpr | primary
   @Override
   public Void visitNotExpr(FilterParser.NotExprContext ctx) {
-    // TODO
+    if (ctx.NOT() != null) {
+      visit(ctx.notExpr());
+      exprStack.push(new Expr.Not(exprStack.pop()));
+    } else {
+      visit(ctx.primary());
+    }
+
     return null;
   }
 
-  // primary: comparison | '(' expr ')'
   @Override
   public Void visitPrimary(FilterParser.PrimaryContext ctx) {
-    // TODO
+    if (ctx.comparison() != null) {
+      visit(ctx.comparison());
+    } else {
+      visit(ctx.expr());
+    }
+
     return null;
   }
 
-  // comparison
-  //   : IDENTIFIER op=COMPOP value=literal
-  //   | IDENTIFIER IN '(' literalList ')'
   @Override
   public Void visitComparison(FilterParser.ComparisonContext ctx) {
-    // TODO
+    var field = ctx.IDENTIFIER().getText();
+
+    if (ctx.op != null) {
+      visit(ctx.value);
+      exprStack.push(
+          new Expr.Comparison(field, CompOp.fromSymbol(ctx.op.getText()), valueStack.pop()));
+    } else {
+      var values = new ArrayList<Value>();
+
+      for (var literal : ctx.literalList().literal()) {
+        visit(literal);
+        values.add(valueStack.pop());
+      }
+
+      exprStack.push(new Expr.InList(field, values));
+    }
+
     return null;
   }
 
-  // literalList: literal (',' literal)*
   @Override
   public Void visitLiteralList(FilterParser.LiteralListContext ctx) {
-    // TODO
+    for (var literal : ctx.literal()) {
+      visit(literal);
+    }
+
     return null;
   }
 
-  // literal: STRING | NUMBER
   @Override
   public Void visitLiteral(FilterParser.LiteralContext ctx) {
-    // TODO
+    if (ctx.STRING() != null) {
+      valueStack.push(new Value.Str(unquote(ctx.STRING().getText())));
+    } else {
+      valueStack.push(new Value.Num(Integer.parseInt(ctx.NUMBER().getText())));
+    }
+
     return null;
+  }
+
+  private String unquote(String text) {
+    var inner = text.substring(1, text.length() - 1);
+    var result = new StringBuilder();
+    boolean escaped = false;
+
+    for (int i = 0; i < inner.length(); i++) {
+      char c = inner.charAt(i);
+
+      if (escaped) {
+        result.append(c);
+        escaped = false;
+      } else if (c == '\\') {
+        escaped = true;
+      } else {
+        result.append(c);
+      }
+    }
+
+    if (escaped) {
+      result.append('\\');
+    }
+
+    return result.toString();
   }
 }
